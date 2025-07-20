@@ -1,141 +1,225 @@
-// 🌤 Lottie Animation Setup
-let animationInstance = null;
+class SkyCast {
+    constructor() {
+        this.apiKey = "34ce131779ea96b9def18f429f0f373a";
+        this.currentUnit = 'metric'; // metric for Celsius, imperial for Fahrenheit
+        this.initializeElements();
+        this.bindEvents();
+        this.updateDateTime();
+        this.loadDefaultWeather();
+        
+        // Update date/time every minute
+        setInterval(() => this.updateDateTime(), 60000);
+    }
 
-function loadWeatherAnimation(condition) {
-  const container = document.getElementById("weatherAnimation");
-  container.innerHTML = ""; // Clear previous animation
+    initializeElements() {
+        this.cityInput = document.getElementById('cityInput');
+        this.searchBtn = document.getElementById('searchBtn');
+        this.locationBtn = document.getElementById('locationBtn');
+        this.unitToggle = document.getElementById('unitToggle');
+        this.weatherCard = document.getElementById('weatherCard');
+        this.loading = document.getElementById('loading');
+        this.errorMessage = document.getElementById('errorMessage');
+        this.weatherAnimation = document.getElementById('weatherAnimation');
+        
+        // Weather data elements
+        this.cityName = document.getElementById('cityName');
+        this.country = document.getElementById('country');
+        this.dateTime = document.getElementById('dateTime');
+        this.temperature = document.getElementById('temperature');
+        this.tempUnit = document.getElementById('tempUnit');
+        this.weatherIcon = document.getElementById('weatherIcon');
+        this.weatherMain = document.getElementById('weatherMain');
+        this.weatherDescription = document.getElementById('weatherDescription');
+        this.visibility = document.getElementById('visibility');
+        this.humidity = document.getElementById('humidity');
+        this.windSpeed = document.getElementById('windSpeed');
+        this.feelsLike = document.getElementById('feelsLike');
+        this.pressure = document.getElementById('pressure');
+        this.uvIndex = document.getElementById('uvIndex');
+    }
 
-  let animationURL = "";
+    bindEvents() {
+        this.searchBtn.addEventListener('click', () => this.searchWeather());
+        this.cityInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.searchWeather();
+        });
+        this.locationBtn.addEventListener('click', () => this.getCurrentLocation());
+        this.unitToggle.addEventListener('click', () => this.toggleUnit());
+    }
 
-  const cond = condition.toLowerCase().trim();
+    async searchWeather() {
+        const city = this.cityInput.value.trim();
+        if (!city) return;
+        
+        await this.getWeatherData(city);
+    }
 
-  if (cond.includes("thunder")) {
-    animationURL = "https://assets4.lottiefiles.com/packages/lf20_qmfs6jxh.json"; // Thunder
-  } else if (cond.includes("rain") || cond.includes("drizzle")) {
-    animationURL = "https://assets2.lottiefiles.com/packages/lf20_jmBauI.json"; // Rain
-  } else if (cond.includes("snow")) {
-    animationURL = "https://assets10.lottiefiles.com/packages/lf20_hwbhwrqv.json"; // Snow
-  } else if (cond.includes("clear")) {
-    animationURL = "https://assets4.lottiefiles.com/packages/lf20_ukkmrvep.json"; // Sunny
-  } else if (cond.includes("cloud")) {
-    animationURL = "https://assets4.lottiefiles.com/packages/lf20_jmBauI.json"; // Cloudy
-  } else if (cond.includes("fog") || cond.includes("mist") || cond.includes("haze")) {
-    animationURL = "https://assets2.lottiefiles.com/packages/lf20_cg3qvksb.json"; // Fog/Mist/Haze
-  } else {
-    animationURL = "https://assets4.lottiefiles.com/packages/lf20_jmBauI.json"; // Default to cloudy
-  }
+    async getCurrentLocation() {
+        if (!navigator.geolocation) {
+            this.showError('Geolocation is not supported by this browser');
+            return;
+        }
 
-  if (animationURL) {
-    animationInstance = lottie.loadAnimation({
-      container,
-      renderer: 'svg',
-      loop: true,
-      autoplay: true,
-      path: animationURL
-    });
-  }
+        this.showLoading();
+        
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const { latitude, longitude } = position.coords;
+                await this.getWeatherByCoords(latitude, longitude);
+            },
+            (error) => {
+                this.showError('Unable to retrieve your location');
+            }
+        );
+    }
+
+    async getWeatherData(city) {
+        this.showLoading();
+        
+        try {
+            const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${this.apiKey}&units=${this.currentUnit}`;
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                throw new Error(`City not found: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            this.displayWeatherData(data);
+            this.updateBackgroundAnimation(data.weather[0].main.toLowerCase());
+        } catch (error) {
+            this.showError(`Unable to fetch weather data: ${error.message}`);
+        }
+    }
+
+    async getWeatherByCoords(lat, lon) {
+        try {
+            const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${this.apiKey}&units=${this.currentUnit}`;
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                throw new Error(`Weather data not found: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            this.displayWeatherData(data);
+            this.updateBackgroundAnimation(data.weather[0].main.toLowerCase());
+        } catch (error) {
+            this.showError(`Unable to fetch weather data: ${error.message}`);
+        }
+    }
+
+    displayWeatherData(data) {
+        // Update location info
+        this.cityName.textContent = data.name;
+        this.country.textContent = data.sys.country;
+        
+        // Update temperature
+        this.temperature.textContent = Math.round(data.main.temp);
+        this.tempUnit.textContent = this.currentUnit === 'metric' ? '°C' : '°F';
+        
+        // Update weather icon
+        this.weatherIcon.src = `https://openweathermap.org/img/wn/${data.weather[0].icon}@2x.png`;
+        this.weatherIcon.alt = data.weather[0].description;
+        
+        // Update weather description
+        this.weatherMain.textContent = data.weather[0].main;
+        this.weatherDescription.textContent = data.weather[0].description;
+        
+        // Update weather details
+        this.visibility.textContent = `${(data.visibility / 1000).toFixed(1)} km`;
+        this.humidity.textContent = `${data.main.humidity}%`;
+        this.windSpeed.textContent = `${data.wind.speed.toFixed(1)} ${this.currentUnit === 'metric' ? 'm/s' : 'mph'}`;
+        this.feelsLike.textContent = `${Math.round(data.main.feels_like)}${this.currentUnit === 'metric' ? '°C' : '°F'}`;
+        this.pressure.textContent = `${data.main.pressure} hPa`;
+        
+        // UV Index (simulated - OpenWeatherMap free tier doesn't include UV)
+        this.uvIndex.textContent = this.calculateUVIndex(data.weather[0].id);
+        
+        this.showWeatherCard();
+    }
+
+    calculateUVIndex(weatherId) {
+        // Simple simulation based on weather conditions
+        if (weatherId >= 800 && weatherId <= 804) return Math.floor(Math.random() * 5) + 6; // Clear/Clouds
+        if (weatherId >= 500 && weatherId <= 531) return Math.floor(Math.random() * 3) + 2; // Rain
+        if (weatherId >= 200 && weatherId <= 232) return Math.floor(Math.random() * 2) + 1; // Thunderstorm
+        return Math.floor(Math.random() * 4) + 3; // Other conditions
+    }
+
+    updateBackgroundAnimation(weatherCondition) {
+        // Remove existing weather classes
+        this.weatherAnimation.className = 'weather-animation';
+        
+        // Add appropriate weather class
+        const weatherClasses = {
+            'clear': 'clear-sky',
+            'clouds': 'few-clouds',
+            'few clouds': 'few-clouds',
+            'scattered clouds': 'scattered-clouds',
+            'broken clouds': 'broken-clouds',
+            'rain': 'rain',
+            'drizzle': 'shower-rain',
+            'thunderstorm': 'thunderstorm',
+            'snow': 'snow',
+            'mist': 'mist',
+            'fog': 'mist',
+            'haze': 'mist'
+        };
+        
+        const weatherClass = weatherClasses[weatherCondition] || 'clear-sky';
+        this.weatherAnimation.classList.add(weatherClass);
+    }
+
+    toggleUnit() {
+        this.currentUnit = this.currentUnit === 'metric' ? 'imperial' : 'metric';
+        this.unitToggle.textContent = this.currentUnit === 'metric' ? '°C' : '°F';
+        
+        // Refresh weather data with new units if we have a current city
+        if (this.cityInput.value.trim()) {
+            this.searchWeather();
+        }
+    }
+
+    updateDateTime() {
+        const now = new Date();
+        const options = {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        };
+        this.dateTime.textContent = now.toLocaleDateString('en-US', options);
+    }
+
+    loadDefaultWeather() {
+        // Load weather for user's location (Kolkata) as default
+        this.getWeatherData('Kolkata');
+    }
+
+    showLoading() {
+        this.weatherCard.style.display = 'none';
+        this.errorMessage.style.display = 'none';
+        this.loading.style.display = 'block';
+    }
+
+    showWeatherCard() {
+        this.loading.style.display = 'none';
+        this.errorMessage.style.display = 'none';
+        this.weatherCard.style.display = 'block';
+    }
+
+    showError(message) {
+        this.loading.style.display = 'none';
+        this.weatherCard.style.display = 'none';
+        this.errorMessage.style.display = 'block';
+        document.getElementById('errorText').textContent = message;
+    }
 }
 
-// 🌍 Weather API Setup
-const apiKey = "34ce131779ea96b9def18f429f0f373a";
-let currentUnit = "metric";
-let currentCity = "";
-
-// 🔐 Sign-In Validation
-function signIn() {
-  const email = document.getElementById("email").value.trim();
-  const pass = document.getElementById("password").value;
-
-  if (email.endsWith("@gmail.com") && pass.length >= 4) {
-    document.getElementById("signinContainer").style.display = "none";
-    document.getElementById("weatherContainer").style.display = "block";
-  } else {
-    alert("Please enter a valid Gmail ID and a password with at least 4 characters.");
-  }
-}
-
-// 🌦 Get Weather Info
-function getWeather() {
-  const city = document.getElementById("cityInput").value.trim();
-  const resultDiv = document.getElementById("weatherResult");
-
-  if (!city) {
-    resultDiv.innerHTML = "<p>Please enter a city name.</p>";
-    return;
-  }
-
-  currentCity = city;
-  const unitLabel = document.querySelector(".unit-label");
-  unitLabel.textContent = currentUnit === "metric" ? "Celsius" : "Fahrenheit";
-
-  const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=${currentUnit}`;
-
-  resultDiv.innerHTML = "<p>Loading...</p>";
-
-  fetch(url)
-    .then(response => {
-      if (!response.ok) {
-        throw new Error("City not found");
-      }
-      return response.json();
-    })
-    .then(data => {
-      // Use description for more accurate matching
-      const condition = data.weather[0].description.toLowerCase();
-      console.log("Weather condition:", condition); // for debugging
-
-      updateBackground(condition);              // ✅ Background
-      loadWeatherAnimation(condition);          // ✅ Lottie animation
-
-      const tempUnit = currentUnit === "metric" ? "°C" : "°F";
-      const weatherHtml = `
-        <p><strong>City:</strong> ${data.name}</p>
-        <p><strong>Temperature:</strong> ${data.main.temp} ${tempUnit}</p>
-        <p><strong>Weather:</strong> ${capitalize(data.weather[0].description)}</p>
-        <p><strong>Humidity:</strong> ${data.main.humidity}%</p>
-        <p><strong>Wind Speed:</strong> ${data.wind.speed} ${currentUnit === "metric" ? "m/s" : "mph"}</p>
-      `;
-      resultDiv.innerHTML = weatherHtml;
-    })
-    .catch(error => {
-      resultDiv.innerHTML = `<p>Error: ${error.message}</p>`;
-    });
-}
-
-// 🔁 Toggle Celsius / Fahrenheit
-function toggleUnit() {
-  currentUnit = currentUnit === "metric" ? "imperial" : "metric";
-  const unitLabel = document.querySelector(".unit-label");
-  unitLabel.textContent = currentUnit === "metric" ? "Celsius" : "Fahrenheit";
-  if (currentCity) {
-    getWeather();
-  }
-}
-
-// 🎨 Background Visuals
-function updateBackground(condition) {
-  const body = document.body;
-  body.className = ""; // Remove all previous classes
-
-  if (condition.includes("cloud")) {
-    body.classList.add("cloudy");
-  } else if (condition.includes("rain") || condition.includes("drizzle")) {
-    body.classList.add("rainy");
-  } else if (condition.includes("snow")) {
-    body.classList.add("snowy");
-  } else if (condition.includes("clear")) {
-    body.classList.add("sunny");
-  } else if (condition.includes("fog") || condition.includes("mist") || condition.includes("haze")) {
-    body.classList.add("foggy");
-  } else {
-    // default/fallback background
-    body.style.background = "linear-gradient(to top right, #ccefff, #e6f7ff)";
-  }
-}
-
-// 🔠 Capitalize Weather Description
-function capitalize(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-
+// Initialize the app when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    new SkyCast();
+});
